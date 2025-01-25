@@ -1,0 +1,24 @@
+# Flask and extensions
+flask==2.3.3
+flask-cors==4.0.0
+werkzeug==2.3.7
+python-dotenv>=1.0.0
+
+# Database
+supabase>=2.11.0  # Latest version as of now
+
+# OAuth and API
+requests==2.31.0
+PyJWT==2.8.0
+
+# Notion SDK
+notion-client==1.0.0
+
+# Utils
+pydantic>=1.8.2
+
+# Additional dependencies
+cryptography
+
+# Add Supabase client
+supabase>=2.11.0  # Latest version as of now 

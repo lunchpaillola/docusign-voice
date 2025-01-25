@@ -1,0 +1,71 @@
+{
+  "id": "db861345-aa03-4aee-a248-5e1a28b8a673",
+  "name": "DocuNot",
+  "description": {
+    "short": "Store DocuSign files into Notion",
+    "long": "Seamlessly convert your Notion documents into professional DocuSign contracts while preserving formatting and branding. This integration enables teams to:\n- Export Notion pages directly to DocuSign while maintaining document formatting\n\n- Map Notion database fields to DocuSign form fields automatically\n\n\n- Track document status and signature progress within Notion\n\n- Automatically archive signed documents with cloud storage integration\n\n- Access signed documents directly from your Notion workspace\n\nPerfect for teams who manage contracts and need to streamline their document workflow from creation to signature."
+  },
+  "termsOfServiceUrl": "https://www.samplecompany.com/tos",
+  "privacyUrl": "https://www.samplecompany.com/privacy-security",
+  "supportUrl": "https://www.samplecompany.com/support",
+  "publisher": {
+    "name": "Lunch Pail Labs",
+    "email": "help@lunchpaillabs.com",
+    "website": "https://addons.lunchpaillabs.com/"
+  },
+  "connections": [
+    {
+      "id": "18504532-5f8c-47f6-977b-9cdb4ef591a2",
+      "name": "authentication",
+      "description": "Secure connection to Sample Extension App",
+      "type": "oauth2",
+      "params": {
+        "provider": "CUSTOM",
+        "clientId": "183d872b-594c-8083-9c0f-003734e0c4f7",
+        "clientSecret": "[omitted]",
+        "scopes": [],
+        "customConfig": {
+          "authorizationMethod": "header",
+          "authorizationParams": {
+            "prompt": "consent",
+            "access_type": "offline"
+          },
+          "authorizationUrl": "https://0294-2605-a601-556e-3100-a47d-4087-e632-d233.ngrok-free.app/api/oauth/authorize",
+          "requiredScopes": [],
+          "scopeSeparator": " ",
+          "tokenUrl": "https://0294-2605-a601-556e-3100-a47d-4087-e632-d233.ngrok-free.app/api/oauth/token",
+          "refreshScopes": []
+        }
+      }
+    }
+  ],
+  "icon": {
+    "data": "[omitted]",
+    "mediaType": "image/png",
+    "id": "d5e8aa30-ccf8-46c7-adbb-e634310720ba"
+  },
+  "screenshots": [],
+  "extensions": [
+    {
+      "name": "My Data Archive Extension",
+      "description": "Used to archive an envelope",
+      "template": "EAP.Version1.SpecifiedArchive",
+      "actionReferences": ["My Data Archive Action"]
+    }
+  ],
+  "actions": [
+    {
+      "name": "My Data Archive Action",
+      "description": "This is a description of my data archive action",
+      "template": "Document.Version1.SpecifiedArchive",
+      "connectionsReference": "authentication",
+      "params": {
+        "uri": "https://0294-2605-a601-556e-3100-a47d-4087-e632-d233.ngrok-free.app/api/archive"
+      }
+    }
+  ],
+  "signupUrl": "https://www.samplecompany.com/signup",
+  "changelog": "",
+  "publicationRegions": ["US"],
+  "distribution": "PUBLIC"
+}
