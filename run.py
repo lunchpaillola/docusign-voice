@@ -8,9 +8,4 @@ load_dotenv()
 app = create_app()
 
 if __name__ == '__main__':
-    port = int(os.getenv('PORT', 3000))
-    app.run(
-        host='0.0.0.0',  # Makes it externally visible
-        port=port,
-        debug=(os.getenv('NODE_ENV') == 'development')
-    ) 
+    app.run(host='0.0.0.0', port=3000, debug=True) 

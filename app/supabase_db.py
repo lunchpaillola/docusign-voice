@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import os
 from typing import Optional, Dict
 from flask import current_app
+import uuid
 
 def get_supabase_client():
     """Get Supabase client when needed"""
@@ -102,4 +103,103 @@ def update_last_used(state: str):
             .eq('state', state)\
             .execute()
     except Exception as e:
-        print(f"Error updating last_used: {str(e)}") 
+        print(f"Error updating last_used: {str(e)}")
+
+def store_verification_code(phone, code):
+    """Store a new verification code"""
+    expires_at = datetime.utcnow() + timedelta(minutes=10)
+    
+    query = """
+    INSERT INTO verification_codes (phone, code, expires_at)
+    VALUES (:phone, :code, :expires_at)
+    """
+    
+    current_app.db.execute(query, {
+        'phone': phone,
+        'code': code,
+        'expires_at': expires_at
+    })
+
+def verify_code(phone, code):
+    """Verify a code and return True if valid"""
+    query = """
+    SELECT id FROM verification_codes 
+    WHERE phone = :phone 
+    AND code = :code 
+    AND expires_at > NOW() 
+    AND verified = FALSE
+    """
+    
+    result = current_app.db.execute(query, {
+        'phone': phone,
+        'code': code
+    }).fetchone()
+    
+    if result:
+        # Mark code as verified
+        current_app.db.execute(
+            "UPDATE verification_codes SET verified = TRUE WHERE id = :id",
+            {'id': result[0]}
+        )
+        return True
+    return False
+
+def create_or_get_user(phone):
+    """Get existing user or create new one"""
+    query = """
+    INSERT INTO users (id, phone)
+    VALUES (:id, :phone)
+    ON CONFLICT (phone) DO UPDATE
+    SET last_login = NOW()
+    RETURNING id
+    """
+    
+    user_id = str(uuid.uuid4())
+    result = current_app.db.execute(query, {
+        'id': user_id,
+        'phone': phone
+    }).fetchone()
+    
+    return result[0]
+
+def store_user_session(user_id, refresh_token):
+    """Store a new user session"""
+    expires_at = datetime.utcnow() + timedelta(days=30)
+    
+    query = """
+    INSERT INTO user_sessions (user_id, refresh_token, expires_at)
+    VALUES (:user_id, :refresh_token, :expires_at)
+    """
+    
+    current_app.db.execute(query, {
+        'user_id': user_id,
+        'refresh_token': refresh_token,
+        'expires_at': expires_at
+    })
+
+def store_oauth_state(state, data):
+    """Store OAuth state"""
+    supabase = get_supabase_client()
+    return supabase.table('oauth_tokens').insert({
+        'state': state,
+        'redirect_uri': data['redirect_uri'],
+        # Don't try to store docusign_state yet
+        'created_at': datetime.utcnow().isoformat()
+    }).execute()
+
+def get_oauth_state(state):
+    """Get OAuth state"""
+    supabase = get_supabase_client()
+    response = supabase.table('oauth_tokens')\
+        .select('*')\
+        .eq('state', state)\
+        .execute()
+    if not response.data:
+        return None
+    
+    data = response.data[0]
+    return {
+        'redirect_uri': data.get('redirect_uri'),
+        # Return None for docusign_state
+        'docusign_state': None
+    } 

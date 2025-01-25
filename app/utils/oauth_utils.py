@@ -1,68 +1,54 @@
-import requests
-import base64
 import jwt
 import uuid
 from datetime import datetime, timedelta
 from flask import current_app
 from .errors import AuthError
 
-def exchange_notion_code(code):
-    """Exchange authorization code for Notion access token"""
-    token_url = "https://api.notion.com/v1/oauth/token"
-    
-    auth = base64.b64encode(
-        f"{current_app.config['OAUTH_CLIENT_ID']}:{current_app.config['OAUTH_CLIENT_SECRET']}".encode()
-    ).decode()
-    
-    headers = {
-        'Authorization': f'Basic {auth}',
-        'Content-Type': 'application/json'
-    }
-    
-    data = {
-        'grant_type': 'authorization_code',
-        'code': code,
-        'redirect_uri': current_app.config['NOTION_REDIRECT_URI']
-    }
-    
-    response = requests.post(token_url, json=data, headers=headers)
-    if not response.ok:
-        raise AuthError(f"Failed to exchange Notion code for token: {response.text}")
-        
-    return response.json()
+def generate_verification_code():
+    """Generate a 6-digit verification code"""
+    return str(uuid.uuid4().int)[:6]
 
-def generate_access_token():
+def generate_access_token(user_id):
     """Generate JWT access token"""
     payload = {
         'type': 'access_token',
-        'sub': str(uuid.uuid4()),
-        'email': f"{uuid.uuid4()}@test.com",
+        'sub': str(user_id),
         'exp': datetime.utcnow() + timedelta(hours=1)
     }
     return jwt.encode(payload, current_app.config['JWT_SECRET_KEY'], algorithm='HS256')
 
-def generate_refresh_token():
+def generate_refresh_token(user_id):
     """Generate JWT refresh token"""
     payload = {
         'type': 'refresh_token',
+        'sub': str(user_id),
+        'exp': datetime.utcnow() + timedelta(days=30),
         'jti': str(uuid.uuid4())
     }
     return jwt.encode(payload, current_app.config['JWT_SECRET_KEY'], algorithm='HS256')
 
-def refresh_token(refresh_token):
-    """Handle token refresh"""
+def verify_token(token):
+    """Verify a JWT token"""
     try:
-        payload = jwt.decode(
-            refresh_token, 
+        return jwt.decode(
+            token,
             current_app.config['JWT_SECRET_KEY'],
             algorithms=['HS256']
         )
+    except jwt.InvalidTokenError:
+        raise AuthError("Invalid token")
+
+def refresh_token(refresh_token):
+    """Handle token refresh"""
+    try:
+        payload = verify_token(refresh_token)
+        
         if payload['type'] != 'refresh_token':
             raise AuthError("Invalid token type")
             
         return {
-            'access_token': generate_access_token(),
-            'refresh_token': generate_refresh_token(),
+            'access_token': generate_access_token(payload['sub']),
+            'refresh_token': generate_refresh_token(payload['sub']),
             'expires_in': 3600,
             'token_type': 'Bearer'
         }

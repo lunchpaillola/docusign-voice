@@ -12,7 +12,7 @@ load_dotenv()
 def create_app():
     app = Flask(__name__)
     CORS(app, resources={
-        r"/api/*": {
+        r"/*": {  # Allow all routes
             "origins": "*",
             "methods": ["GET", "POST", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"]
@@ -38,7 +38,7 @@ def create_app():
     )
     
     # Register oauth blueprint only once
-    app.register_blueprint(oauth, url_prefix='/api/oauth')  # All OAuth routes under /api/oauth
+    app.register_blueprint(oauth, url_prefix='/oauth')  # This makes routes start with /oauth
     app.register_blueprint(dataio, url_prefix='/api/dataio')  # Add this line
     app.register_blueprint(archive, url_prefix='/api')  # Add this line
     
