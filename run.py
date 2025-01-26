@@ -1,11 +1,16 @@
 from app import create_app
-from dotenv import load_dotenv
-import os
+import asyncio
+from hypercorn.config import Config
+from hypercorn.asyncio import serve
+import logging
 
-# Load environment variables
-load_dotenv()
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = create_app()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=3000, debug=True) 
+    config = Config()
+    config.bind = ["localhost:3000"]
+    asyncio.run(serve(app, config)) 

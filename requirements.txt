@@ -1,8 +1,11 @@
 # Flask and extensions
-flask
+flask[async]
 flask-cors
 python-dotenv
 pyjwt
+asgiref  # For async support
+aioflask  # Add explicit async Flask support
+hypercorn  # ASGI server for Flask
 
 # Database
 supabase
@@ -21,4 +24,7 @@ pydantic>=1.8.2
 cryptography
 
 # Add Supabase client
-supabase>=2.11.0  # Latest version as of now 
+supabase>=2.11.0  # Latest version as of now
+
+# Vapi SDK
+vapi_server_sdk 
