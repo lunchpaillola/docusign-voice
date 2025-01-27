@@ -1,14 +1,15 @@
-from flask import Blueprint, request, jsonify, current_app
-from ..utils.errors import AuthError
+from flask import Blueprint, request, jsonify
 import logging
 import json
-from ..utils.vapi_client import vapi_client, create_verification_assistant
-import asyncio
-import os
+from ..utils.vapi_client import create_verification_assistant, wait_for_call_completion
 import random
+from datetime import datetime, timedelta
 
 verify = Blueprint('verify', __name__)
 logger = logging.getLogger(__name__)
+
+# Simple in-memory store for recent calls
+recent_calls = {}
 
 @verify.route('/verifyPhone', methods=['POST'])
 async def verify_phone():
@@ -27,6 +28,7 @@ async def verify_phone():
         "verifyFailureReason": "reason" (optional)
     }
     """
+    phone = None  # Initialize phone variable for error handling
     try:
         logger.info("\n=== Phone Verification Request ===")
         logger.info(f"Headers: {dict(request.headers)}")
@@ -38,88 +40,90 @@ async def verify_phone():
             return jsonify({
                 "verified": False,
                 "verifyFailureReason": "Missing phone number"
-            }), 200  # Note: Always return 200 as per contract
+            }), 200
             
-        phone = data['phoneNumber']
-        region = data.get('region', '1')  # Default to US/Canada
-        
-        # Format phone number with region code
-        # Remove any non-digit characters from phone number
+        # Format phone number
+        phone = data['phoneNumber']  # Now phone is defined in the main scope
+        region = data.get('region', '1')
         clean_phone = ''.join(filter(str.isdigit, phone))
-        
-        # Format with + and region code
         formatted_phone = f"+{region}{clean_phone}"
         logger.info(f"Formatting phone: {phone} with region {region} -> {formatted_phone}")
         
-        # Validate phone format
         if not clean_phone:
             return jsonify({
                 "verified": False,
                 "verifyFailureReason": "Invalid phone number format"
             }), 200
         
-        # Generate random 4-digit verification code
+        # Check if we've called this number recently (within last 30 seconds)
+        if phone in recent_calls:
+            last_call_time = recent_calls[phone]
+            if datetime.now() - last_call_time < timedelta(seconds=30):
+                return jsonify({
+                    "verified": False,
+                    "verifyFailureReason": "Please wait before trying again"
+                }), 200
+
+        # Store this call attempt
+        recent_calls[phone] = datetime.now()
+
+        # Generate verification code
         verification_code = ''.join([str(random.randint(0, 9)) for _ in range(4)])
         logger.info(f"Generated verification code {verification_code}")
         
-        # Create assistant with this specific code
-        assistant = await create_verification_assistant(verification_code)
+        # Create assistant and initiate call
+        call = await create_verification_assistant(verification_code, formatted_phone)
+        logger.info(f"Call initiated with ID: {call.get('id')}")
         
-        try:
-            # Make outbound call with proper configuration
-            call = await vapi_client.calls.create(
-                assistant=assistant,
-                to_number=formatted_phone,
-                from_number=os.getenv('VAPI_PHONE_NUMBER'),
-                type="outboundPhoneCall",
-                phone_call_transport="pstn",  # Use standard phone network
-                name=f"DocuSign Verification {verification_code}",
-                recordingEnabled=True,
-                transcriptEnabled=True
-            )
-            
-            logger.info(f"Call initiated with ID: {call.id}")
-            
-            # Wait for call completion
-            result = await call.wait_for_completion()
-            
-            # Log the transcript
-            logger.info("\n=== Call Transcript ===")
-            for message in result.get('messages', []):
-                role = message.get('role', 'unknown')
-                content = message.get('content', '')
-                logger.info(f"{role}: {content}")
-            
-            # Check last assistant message for verification status
-            verified = any(
-                "This call is verified" in msg.get('content', '')
-                for msg in result.get('messages', [])
-                if msg.get('role') == 'assistant'
-            )
-            
-            if verified:
-                logger.info(f"✅ Phone {formatted_phone} verified with code {verification_code}")
-                return jsonify({
-                    "verified": True,
-                    "transcript": result.get('messages', [])
-                }), 200
-            else:
-                logger.info(f"❌ Phone {formatted_phone} verification failed")
-                return jsonify({
-                    "verified": False,
-                    "verifyFailureReason": "Failed to verify code",
-                    "transcript": result.get('messages', [])
-                }), 200
-                
-        except Exception as e:
-            logger.error(f"❌ Call failed: {str(e)}")
+        # Wait for completion and check result
+        result = await wait_for_call_completion(call.get('id'))
+        
+        # Log transcript
+        logger.info("\n=== Call Transcript ===")
+        for message in result.get('messages', []):
+            logger.info(f"{message.get('role', 'unknown')}: {message.get('content', '')}")
+        
+        # Check verification status from analysis summary
+        analysis = result.get('analysis', {}).get('summary')
+        logger.info(f"Call Analysis: {analysis}")
+        
+        # If analysis is a string, try to parse it as JSON
+        if isinstance(analysis, str):
+            try:
+                analysis_data = json.loads(analysis)
+                verified = analysis_data.get('verified', False)
+                verification_reason = analysis_data.get('reason', 'No analysis available')
+            except json.JSONDecodeError:
+                verified = False
+                verification_reason = "Could not parse analysis result"
+        else:
+            verified = analysis.get('verified', False) if analysis else False
+            verification_reason = analysis.get('reason', 'No analysis available') if analysis else 'No analysis available'
+
+        # Clean up after verification attempt
+        if phone in recent_calls:
+            del recent_calls[phone]
+
+        if verified:
+            logger.info(f"✅ Phone {formatted_phone} verified with code {verification_code}")
+            return jsonify({
+                "verified": True,
+                "reason": verification_reason,
+                "transcript": result.get('messages', [])
+            }), 200
+        else:
+            logger.info(f"❌ Phone {formatted_phone} verification failed: {verification_reason}")
             return jsonify({
                 "verified": False,
-                "verifyFailureReason": f"Call failed: {str(e)}"
+                "verifyFailureReason": verification_reason,
+                "transcript": result.get('messages', [])
             }), 200
             
     except Exception as e:
         logger.error(f"❌ Verification Error: {str(e)}")
+        # Clean up on error (phone is now defined)
+        if phone and phone in recent_calls:
+            del recent_calls[phone]
         return jsonify({
             "verified": False,
             "verifyFailureReason": f"Verification service error: {str(e)}"
